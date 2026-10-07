@@ -2,10 +2,10 @@ name: Checks
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'src-tauri/**', 'scripts/**', 'package*.json', 'tsconfig.json', 'vite.config.ts', 'ghboost-core.lock.json', '.github/workflows/**']
+    paths: ['src/**', 'src-tauri/**', 'scripts/**', 'package*.json', 'tsconfig.json', 'vite.config.ts', 'index.html', '.prettierrc.json', '.gitattributes', 'ghboost-core.lock.json', '.github/workflows/**']
   pull_request:
     branches: [main]
-    paths: ['src/**', 'src-tauri/**', 'scripts/**', 'package*.json', 'tsconfig.json', 'vite.config.ts', 'ghboost-core.lock.json', '.github/workflows/**']
+    paths: ['src/**', 'src-tauri/**', 'scripts/**', 'package*.json', 'tsconfig.json', 'vite.config.ts', 'index.html', '.prettierrc.json', '.gitattributes', 'ghboost-core.lock.json', '.github/workflows/**']
   workflow_dispatch:
 permissions:
   contents: read
