@@ -2,9 +2,18 @@
 
 日期：2026-10-07，北京时间。平台：Windows x64，Rust 1.98.1、Node.js 24.19.0，应用版本 0.1.0。
 
-当前依赖已同步到 GhBoost 远端提交 `0555888ac95eea36d710b7cafe05ca41cbcd341e`，包含加速会话和退出清理修复。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。Git URL/环境接口未变化，GhArchive 继续只准备 Git 访问，不启动加速会话或清理 GhBoost 所拥有的网络配置。
+当前依赖已同步到 GhBoost 远端提交 `d4674b16e60ee87141f13baf84c15942c398b9dd`，新增多轮 HTTPS 优选与代理路由缓存。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。Git URL/环境接口未变化，GhArchive 继续只准备 Git 访问，不启动加速会话或清理 GhBoost 所拥有的网络配置。
 
 下面的真实网络和 GUI/托盘验收记录来自首轮 `e289a0c00f23bb547fa26e374b6fb012ec0dcf20` 构建；新核心的构建与 CLI 复验单独记录，不能据此声称重新操作了 GUI 或重启电脑。
+
+## `d4674b1` 核心更新复验
+
+- 7 个应用库测试、CLI/GUI 测试目标与 doc-tests、fmt、all-targets check、前端格式检查和生产构建通过；Windows PowerShell 5.1 下的 release CLI smoke 验证通过。
+- `scripts/build.ps1 -Version 0.1.0` 重新生成 CLI、GUI、NSIS EXE 和 MSI。没有创建版本标签或运行云端安装包工作流。
+- 20:00:35–20:00:39，普通配置下的 release CLI 完成 `octocat/git-consortium` 首次 mirror clone（83,208 字节）及增量 fetch/remote update（90,061 字节），两轮均一次尝试成功、退出码 0。隔离测试将 retries=0、timeout_seconds=60，默认应用设置未改变。
+- 为实际覆盖新核心代理策略，在被忽略的测试目录调用核心 `network::speedtest`，只测 github.com，HTTPS 优选成功；随后调用核心 `proxy::serve`，仅监听本机 127.0.0.1:17897，CLI 通过测试进程的 GHBOOST_DATA_DIR 使用该代理。20:00:45–20:00:49 的 mirror clone 与增量更新也均一次尝试成功、退出码 0。结束时通过核心 stop 正常停止，未修改系统 PAC/代理或 Hosts，没有遗留代理进程。
+- 本轮没有修改 Clash 的 GitHub DIRECT 规则。普通配置下也恢复成功，且此次核心提交未修改 Git URL/环境接口，因此不能仅凭更新后成功把此前失败唯一归因于旧核心；此前将问题主要归到 Clash 的判断证据不足。新核心的 HTTPS 优选和代理路径实际可用，长期稳定性仍需持续观察。
+- 详细结果位于忽略目录 `output/core-d4674b1-probe/{baseline,proxy,speedtest}.json`，私有核心及隔离诊断代码不进入公开仓库。
 
 ## `0555888` 核心更新复验
 
