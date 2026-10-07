@@ -602,7 +602,7 @@ onUnmounted(() => {
                   <span><Clock3 :size="14" />每天 {{ t.schedule_time }}</span
                   ><span><FolderOpen :size="14" />{{ t.backup_dir }}</span
                   ><span v-if="t.use_mirror" class="mirror-note">镜像</span
-                  ><span v-if="t.use_proxy">GhBoost 代理</span>
+                  ><span v-if="t.use_proxy">内置 GhBoost 加速</span>
                 </div>
                 <p v-if="t.last_error" class="task-error">{{ t.last_error }}</p>
                 <div class="task-bottom">
@@ -749,7 +749,7 @@ onUnmounted(() => {
           <section class="settings-section">
             <div>
               <h2>GitHub 访问</h2>
-              <p>通过 GhBoost 核心准备 Git 连接。</p>
+              <p>自动调用内置 GhBoost 获取仓库，无需先打开 GhBoost。</p>
             </div>
             <div class="panel settings-fields">
               <label
@@ -879,7 +879,7 @@ onUnmounted(() => {
         ></label
       >
       <div class="checkboxes">
-        <label><input v-model="form.use_proxy" type="checkbox" />使用已开启的 GhBoost 代理</label
+        <label><input v-model="form.use_proxy" type="checkbox" />使用内置 GhBoost 加速</label
         ><label><input v-model="form.use_mirror" type="checkbox" />使用公开仓库镜像</label>
       </div>
       <label

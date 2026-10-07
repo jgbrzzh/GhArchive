@@ -100,7 +100,15 @@ fn config_entry(env: &mut HashMap<String, String>, key: &str, value: String) {
     env.insert(format!("GIT_CONFIG_VALUE_{i}"), value);
     env.insert("GIT_CONFIG_COUNT".into(), (i + 1).to_string());
 }
-fn prepare(t: &Task, s: &Store, token: Option<&str>) -> Result<(String, HashMap<String, String>)> {
+async fn prepare(
+    t: &Task,
+    s: &Store,
+    token: Option<&str>,
+) -> Result<(
+    String,
+    HashMap<String, String>,
+    crate::acceleration::Connection,
+)> {
     let mirror = s.get("mirror_url")?.as_str().unwrap().to_owned();
     if t.input.use_mirror && mirror.is_empty() {
         return Err(Failure::new(1, "请先在设置中配置镜像地址"));
@@ -115,11 +123,19 @@ fn prepare(t: &Task, s: &Store, token: Option<&str>) -> Result<(String, HashMap<
         private_repository: token.is_some(),
     };
     let url = ghboost_core::prepare_git_url_with_options(&t.input.repo_url, &options)?;
-    let mut env =
-        ghboost_core::prepare_git_env_with_options(&ghboost_core::store::Store::open()?, &options)?;
     if s.get("require_hosts")? == true {
         ghboost_core::ensure_hosts_applied()?;
     }
+    let domain = url::Url::parse(&ghboost_core::prepare_git_url(&t.input.repo_url)?)
+        .map_err(|e| Failure::new(1, e))?;
+    let automatic = crate::acceleration::Connection::prepare(
+        s,
+        t.id,
+        options.use_proxy && options.mirror.is_none(),
+        domain.host_str().unwrap(),
+    )
+    .await?;
+    let mut env = automatic.git_env(&options)?;
     // 限定每次命令的配置，避免旧的 insteadOf 或凭据助手向镜像传送 Token。
     env.insert("GIT_CONFIG_NOSYSTEM".into(), "1".into());
     env.insert(
@@ -151,7 +167,7 @@ fn prepare(t: &Task, s: &Store, token: Option<&str>) -> Result<(String, HashMap<
             format!("Authorization: Basic {value}"),
         );
     }
-    Ok((url, env))
+    Ok((url, env, automatic))
 }
 // 持续排空管道并截断保存内容，避免 Git 大量输出占满内存或阻塞。
 async fn capture<R: AsyncRead + Unpin>(mut reader: R) -> std::io::Result<Vec<u8>> {
@@ -297,7 +313,8 @@ async fn perform(s: &Store, t: &Task) -> Outcome {
         attempts: 0,
         error: None,
     };
-    let result: Result<()> = async {
+    let mut acceleration = None;
+    let mut result: Result<()> = async {
         if s.get("accepted_notice")? != true {
             return Err(Failure::new(
                 2,
@@ -321,10 +338,33 @@ async fn perform(s: &Store, t: &Task) -> Outcome {
         directory_lock
             .try_lock_exclusive()
             .map_err(|_| Failure::new(1, "此备份目录正在被另一个任务使用"))?;
-        let (url, env) = prepare(t, s, token)?;
-        let timeout = s.get("timeout_seconds")?.as_u64().unwrap();
         let retries = s.get("retries")?.as_u64().unwrap();
         let delay = s.get("retry_delay_seconds")?.as_u64().unwrap();
+        let mut preparation_attempt = 0;
+        let (url, env, automatic) = loop {
+            outcome.attempts = preparation_attempt as u32 + 1;
+            match prepare(t, s, token).await {
+                Ok(connection) => break connection,
+                Err(e) if e.exit == 3 && preparation_attempt < retries => {
+                    outcome.stderr.push_str(&format!(
+                        "\nGhBoost 准备第 {} 次失败：{}；{} 秒后重试\n",
+                        preparation_attempt + 1,
+                        e.message,
+                        delay
+                    ));
+                    preparation_attempt += 1;
+                    tokio::time::sleep(Duration::from_secs(delay)).await;
+                }
+                Err(e) => return Err(e),
+            }
+        };
+        if let Some(port) = automatic.port() {
+            outcome.stdout.push_str(&format!(
+                "GhBoost 内置加速：DNS/HTTPS 优选完成，任务代理 127.0.0.1:{port}\n"
+            ));
+        }
+        acceleration = Some(automatic);
+        let timeout = s.get("timeout_seconds")?.as_u64().unwrap();
         if p.exists() {
             let check = git(
                 &[
@@ -441,6 +481,16 @@ async fn perform(s: &Store, t: &Task) -> Outcome {
         ))
     }
     .await;
+    if let Some(automatic) = acceleration {
+        if let Err(e) = automatic.close().await {
+            outcome
+                .stderr
+                .push_str(&format!("\n内置 GhBoost 清理失败：{}\n", e.message));
+            if result.is_ok() {
+                result = Err(e);
+            }
+        }
+    }
     if let Err(e) = result {
         outcome.error = Some(e);
     }

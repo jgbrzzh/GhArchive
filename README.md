@@ -10,6 +10,8 @@
 ## 功能
 
 - 每个仓库单独设置每日执行时间、目录、代理、镜像、备注和启用状态。
+- 默认自动调用内置 GhBoost 核心做 DNS/HTTPS 优选并启动任务专用代理，无需先运行 GhBoost 软件；结束后关闭代理。
+
 - 首次 `git clone --mirror`，随后更新 origin 并运行 `git fetch --all --prune --tags`、`git remote update --prune`。
 - 默认最多同时运行 2 个任务；失败额外重试 3 次，每次间隔 30 秒。并发、重试和命令超时可配置。
 - 仪表盘、任务管理、运行历史、JSON 导出、设置，以及右上角在默认浏览器打开的 GitHub 图标。
@@ -17,6 +19,8 @@
 - SQLite 与每日文件日志记录运行时间、退出码、stdout、stderr、大小和结果。
 - GitHub Token 使用 Windows DPAPI 按当前用户加密保存，不回读明文、不写入仓库 URL；配置 Token 时禁止镜像。
 - CLI 的成功、参数错误、帮助输出均支持统一 `--json` 封装。
+
+逐项实现与验收边界见 [要求自检](docs/AGENTS_AUDIT.md) 和 [验收记录](docs/VALIDATION.md)。
 
 ## 使用前说明
 
@@ -116,14 +120,15 @@ $secret = $null
 ## 运行与存储
 
 - 默认数据目录 `%LOCALAPPDATA%\GhArchive`，包含 `gharchive.db`、`token.dpapi`、`logs\backup-YYYY-MM-DD.log` 和任务锁。
-- `GHARCHIVE_DATA_DIR` 可设置独立数据目录；`GHBOOST_DATA_DIR` 可选择 GhBoost 数据目录。
+- `GHARCHIVE_DATA_DIR` 可设置独立数据目录；内置核心使用其中的 `ghboost/task-<id>/`，不借用外部 GhBoost 的代理或系统网络配置。
 - 定时使用 Windows 本地时间，每 5 秒检查一次；重启会补跑过期任务一次，再安排下一日。电脑睡眠、退出和关机期间无法运行。
 - “备份占用”是各任务最近成功运行所记录的大小之和；相同目标的多个任务会重复统计，不等同于实时全盘占用。
 - 写入前检查目录权限和最低剩余空间（默认 100 MB），不是对完整仓库大小的估计。禁止 junction、符号链接和路径穿越。
 - 活动任务与同一目标目录均加锁；默认并发数在同一数据目录的 GUI、CLI 和调度器之间共享。
 - 超时按单个 Git 命令计算。Windows 超时时尝试终止 Git 子进程树；异常结束的运行在下次启动记为 interrupted。
 - 更新只允许专用 bare 仓库及 origin 远程，拒绝其他远程地址，防止凭据泄露。Git 配置隔离，保留 TLS 证书校验。
-- GhBoost 代理须先在 GhBoost 启动；未开启时核心按原站配置准备访问。镜像地址需你自行选择，程序不保证第三方服务可用。
+- 默认任务自动调用核心 DNS/HTTPS 优选（每次上限 90 秒），启动本机随机端口的 CONNECT 代理，Git 环境由核心生成，保持原站端到端 TLS。GUI、CLI 与定时器共用此路径。失败会记录错误，不悄悄退回直连；结束或取消时释放代理。关闭任务的加速选项（CLI `--no-proxy`）才使用核心准备的无代理环境；镜像模式独立运行，地址需自行选择。
+- 当前核心单个代理连接上限 300 秒；很大或很慢的仓库可能因连接超时失败，调高应用的 Git 超时不能改变核心连接上限。
 - 每个 Git 输出管道最多保存 1 MB，每次运行累计日志最多保留 4 MB；历史界面显示最近 200 条，导出最多 1000 条。日志暂不自动轮转清理旧日期文件。
 
 ## Windows 打包
@@ -168,6 +173,7 @@ GhArchive/
 │   ├── migrations/001.sql
 │   ├── src/
 │   │   ├── backup/mod.rs
+│   │   ├── acceleration.rs
 │   │   ├── bin/gharchive.rs
 │   │   ├── db/mod.rs
 │   │   ├── scheduler/mod.rs

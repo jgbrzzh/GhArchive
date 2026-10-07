@@ -2,9 +2,20 @@
 
 日期：2026-10-07，北京时间。平台：Windows x64，Rust 1.98.1、Node.js 24.19.0，应用版本 0.1.0。
 
-当前依赖已同步到 GhBoost 远端提交 `d4674b16e60ee87141f13baf84c15942c398b9dd`，新增多轮 HTTPS 优选与代理路由缓存。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。Git URL/环境接口未变化，GhArchive 继续只准备 Git 访问，不启动加速会话或清理 GhBoost 所拥有的网络配置。
+当前依赖已同步到 GhBoost 远端提交 `00710891d5cc882681538167be060e7e48707aed`，核心 0.1.1，包含代理路由 TLS 验证。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。默认任务现已自动调用核心 DNS/HTTPS 优选和任务专用代理，不依赖外部 GhBoost 软件，不修改系统 PAC/代理或 Hosts。
 
 下面的真实网络和 GUI/托盘验收记录来自首轮 `e289a0c00f23bb547fa26e374b6fb012ec0dcf20` 构建；新核心的构建与 CLI 复验单独记录，不能据此声称重新操作了 GUI 或重启电脑。
+
+## `00710891` 内置核心自动调用复验
+
+- `cargo test --locked` 的 10 个库测试、CLI/GUI 目标与 doc-tests 通过；代理并发独立停止、取消后释放端口并重启、代理意外停止后不静默直连三个新增测试通过。
+- 最终本地 `scripts/build.ps1 -Version 0.1.0` 完成 release CLI、Vue/TypeScript、Tauri GUI、NSIS EXE 和 MSI 构建。首次构建曾因验收 CLI 占用待覆盖 exe 失败，结束测试并改用独立测试副本后重新构建通过。没有触发云端版本打包。
+- 普通 CLI 默认加速配置下，21:26:06 开始、21:28:17 完成 `Variante/endfield_research_kit` 首次 mirror clone，一次成功、退出码 0。21:28:33–21:28:39 的增量 fetch/remote update 同样一次成功，57,850,468 字节（约 55.2 MiB）。无需诊断助手、外部 GhBoost 软件或 GHBOOST_DATA_DIR。
+- 两轮 stdout 均记录了内置优选和任务代理，端口分别为 3977、9759；结束后端口无监听，proxy-state.json 已移除，无 system-proxy.json。Git `fsck --full` 通过，HEAD 为 `717c6a56cb3198d5bb7ed0588dd34ff53293bd55`。
+- 最终 release CLI daemon 于 21:31:03 按临近时间自动触发 `octocat/git-consortium`，21:31:09 完成首次镜像（83,208 字节），一次成功，日志记录内置核心代理 11892。每日 03:00 任务启用时正确计算为 2026-10-08 03:00；没有等待到凌晨。
+- 21:32:30–21:32:36，最终 release CLI `run-all` 同时运行上述两个任务，两个独立代理端口 14511、14512，均一次完成增量更新。测试后停止 daemon、禁用隔离任务，保留镜像与证据，不留下测试计划。
+- 隔离验收将 retries=0、Git timeout=600，默认应用配置仍为 3 次重试、30 秒间隔。核心准备阶段的网络错误现也按该配置重试，权限/参数错误不反复重试。大仓库仍受核心当前每个代理连接 300 秒上限影响，不能把本轮成功当作任意大小仓库保证。
+- 本轮新版生产 GUI 尚未重新操作、未重启 Windows；此前的 WebView/托盘和自启登记验证仍作为历史证据。逐项符合情况与未验收项见 [AGENTS_AUDIT.md](AGENTS_AUDIT.md)。
 
 ## `d4674b1` 核心更新复验
 
@@ -27,7 +38,7 @@
 
 | 项目 | 实际结果 |
 | --- | --- |
-| `cargo test --manifest-path src-tauri/Cargo.toml --locked` | 7 个库测试通过，CLI/GUI 测试目标和 doc-tests 通过 |
+| `cargo test --manifest-path src-tauri/Cargo.toml --locked` | 当前 10 个库测试通过，CLI/GUI 测试目标和 doc-tests 通过 |
 | `cargo check --manifest-path src-tauri/Cargo.toml --all-targets --locked` | 通过 |
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | 通过 |
 | `npm run build` | TypeScript 检查与 Vite 打包通过 |

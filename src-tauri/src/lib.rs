@@ -1,3 +1,4 @@
+pub mod acceleration;
 pub mod backup;
 pub mod cli;
 pub mod db;
@@ -19,4 +20,4 @@ pub fn response(result: Result<serde_json::Value>) -> Envelope {
     e
 }
 pub const REPOSITORY: &str = "https://github.com/jgbrzzh/GhArchive";
-pub const NOTICE: &str = "GhArchive 将按你设置的时间访问 GitHub 并写入本地备份。镜像只用于公开仓库；私有仓库令牌使用当前 Windows 用户的 DPAPI 加密。请仅备份有权访问的内容。删除任务不会删除备份。关闭窗口后程序继续在托盘运行；退出或关机期间不执行任务，重启后补跑到期任务。";
+pub const NOTICE: &str = "GhArchive 将按你设置的时间访问 GitHub 并写入本地备份。默认自动调用内置 GhBoost 做 DNS/HTTPS 优选及任务代理，不改系统 Hosts 或 PAC。镜像只用于公开仓库；私有仓库令牌使用当前 Windows 用户的 DPAPI 加密。请仅备份有权访问的内容。删除任务不会删除备份。关闭窗口后程序继续在托盘运行；退出或关机期间不执行任务，重启后补跑到期任务。";

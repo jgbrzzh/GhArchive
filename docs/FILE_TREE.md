@@ -23,6 +23,7 @@ README.md
 SECURITY.md
 THIRD_PARTY_NOTICES.md
 docs/DATA_MODEL.md
+docs/AGENTS_AUDIT.md
 docs/FILE_TREE.md
 docs/VALIDATION.md
 ghboost-core.lock.json
@@ -46,6 +47,7 @@ src-tauri/icons/icon.png
 src-tauri/installer-hooks.nsh
 src-tauri/migrations/001.sql
 src-tauri/src/backup/mod.rs
+src-tauri/src/acceleration.rs
 src-tauri/src/bin/gharchive.rs
 src-tauri/src/cli.rs
 src-tauri/src/db/mod.rs
