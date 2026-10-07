@@ -2,7 +2,17 @@
 
 日期：2026-10-07，北京时间。平台：Windows x64，Rust 1.98.1、Node.js 24.19.0，应用版本 0.1.0。
 
-最终复验使用 GhBoost 已推送提交 `e289a0c00f23bb547fa26e374b6fb012ec0dcf20` 的干净核心快照。本地 GhBoost 工作区还有其他未提交修改，未纳入此构建，也未改动这些文件。
+当前依赖已同步到 GhBoost 远端提交 `0555888ac95eea36d710b7cafe05ca41cbcd341e`，包含加速会话和退出清理修复。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。Git URL/环境接口未变化，GhArchive 继续只准备 Git 访问，不启动加速会话或清理 GhBoost 所拥有的网络配置。
+
+下面的真实网络和 GUI/托盘验收记录来自首轮 `e289a0c00f23bb547fa26e374b6fb012ec0dcf20` 构建；新核心的构建与 CLI 复验单独记录，不能据此声称重新操作了 GUI 或重启电脑。
+
+## `0555888` 核心更新复验
+
+- `cargo test --locked` 的 7 个库测试、CLI/GUI 目标和 doc-tests 通过。
+- `cargo fmt --check`、`cargo check --all-targets --locked`、前端格式检查和生产构建通过。
+- Windows PowerShell 5.1 下的 release CLI smoke 验证通过。
+- `scripts/build.ps1 -Version 0.1.0` 完成 CLI、GUI、NSIS EXE 和 MSI 全部构建。没有触发云端安装包构建或新增版本标签。
+- 新核心下对 `octocat/git-consortium` 的两轮真实克隆均尝试 4 次后失败，Git 退出码 128，日志仍为 `schannel: failed to receive handshake`。第二轮期间任务被用户中断，后台最终结果也已读取；当前没有遗留验证进程。本轮没有完成首次克隆或增量更新，不能把首轮旧核心的成功记录当作本轮网络验收通过。
 
 ## 构建与命令行
 
