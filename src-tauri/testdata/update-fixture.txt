@@ -1,0 +1,1 @@
+GhArchive signed updater verification fixture.

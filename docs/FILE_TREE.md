@@ -32,6 +32,8 @@ package-lock.json
 package.json
 scripts/build.ps1
 scripts/prepare-core.ps1
+scripts/prepare-update-manifest.ps1
+scripts/updater-build.json
 scripts/test-cli.ps1
 scripts/verify-version.ps1
 src-tauri/Cargo.lock
@@ -55,6 +57,9 @@ src-tauri/src/lib.rs
 src-tauri/src/main.rs
 src-tauri/src/scheduler/mod.rs
 src-tauri/src/secrets.rs
+src-tauri/src/update.rs
+src-tauri/testdata/update-fixture.txt
+src-tauri/testdata/update-fixture.txt.sig
 src-tauri/tauri.conf.json
 src/App.vue
 src/assets/gharchive.svg

@@ -19,6 +19,7 @@
 - SQLite 与每日文件日志记录运行时间、退出码、stdout、stderr、大小和结果。
 - GitHub Token 使用 Windows DPAPI 按当前用户加密保存，不回读明文、不写入仓库 URL；配置 Token 时禁止镜像。
 - CLI 的成功、参数错误、帮助输出均支持统一 `--json` 封装。
+- 关于页显示版本与项目主页；设置/关于页可检查、下载和安装经过签名验证的软件更新。
 
 逐项实现与验收边界见 [要求自检](docs/AGENTS_AUDIT.md) 和 [验收记录](docs/VALIDATION.md)。
 
@@ -32,7 +33,7 @@
 
 GhArchive 应用源码公开，许可证为 **GPL-3.0-only**。GhBoost 核心仍为私有依赖，按项目所有者要求不收录到本公开仓库。核心复制到忽略的 `.deps/ghboost-core`，Cargo 通过路径引用它；具体来源提交固定在 [ghboost-core.lock.json](ghboost-core.lock.json)。本仓库没有私有 Token，也没有修改 GhBoost。
 
-构建应用需要拥有该核心的合法访问权限。本公开仓库**无法在缺少核心的情况下独立构建 Rust 应用**。如果分发 GPL 打包程序，需要向接收者提供包含该核心在内的完整对应源码及许可证；这应由分发者安排。本工作流只上传构建产物，不自动创建或发布 GitHub Release。
+构建应用需要拥有该核心的合法访问权限。本公开仓库**无法在缺少核心的情况下独立构建 Rust 应用**。如果分发 GPL 打包程序，需要向接收者提供包含该核心在内的完整对应源码及许可证；这应由分发者安排。版本工作流默认上传构建产物；手动明确版本并勾选发布时才创建 GitHub Release。
 
 ## 本地开发
 
@@ -136,7 +137,7 @@ $secret = $null
 明确指定与三个版本文件一致的版本：
 
 ```powershell
-./scripts/build.ps1 -Version 0.1.0
+./scripts/build.ps1 -Version 0.1.1
 ```
 
 生成 `src-tauri/target/release/gharchive.exe`、`gharchive-desktop.exe`、`bundle/nsis/*-setup.exe` 和 `bundle/msi/*.msi`。两个安装器均包含 GUI 与 CLI。首次安装缺少 WebView2 时会下载 Runtime。程序未代码签名，Windows 可能显示 SmartScreen 提示。
@@ -146,13 +147,30 @@ $secret = $null
 普通 main 源码推送或 PR 只运行检查，文档改动不触发。只有以下情况执行 Windows GUI/CLI、NSIS EXE、MSI 打包：
 
 1. 手动运行 **Explicit version Windows build**，填写准确版本；
-2. 主动推送版本标签，例如 `v0.1.0`。
+2. 主动推送版本标签，例如 `v0.1.1`。
 
-不会在初始化时创建标签，不自动发布 Release，不跑 OS/架构矩阵、不定时跑工作流；并发检查自动取消旧运行，构建产物仅保留 7 天。`v*` 标签会先校验格式及三个版本文件，不一致立即失败。
+普通提交不发布 Release、不跑 OS/架构矩阵、不定时跑工作流；并发检查自动取消旧运行，构建产物仅保留 7 天。`v*` 标签会先校验格式及三个版本文件，不一致立即失败。手动版本构建的 `publish` 默认关闭；勾选后发布签名安装包和 `latest.json`，为软件更新提供稳定版本来源。预发布版本使用 GitHub prerelease，不替代稳定更新源；已有版本禁止覆盖。
 
 仓库管理员需在 **Settings → Secrets and variables → Actions** 添加 `GHBOOST_READ_TOKEN`，建议使用仅有 GhBoost 仓库 Contents read 权限的细粒度 Token。它只用于获取固定提交的私有依赖，Git checkout 不保存凭据。没有 Secret 时普通工作流明确注明 Rust 检查跳过、仍验证前端；指定版本打包立即报错。来自 fork 的 PR 不获得私有核心或 Secret。
 
 注意：发布产物前应安排 GPL 对应源码交付；只上传二进制不替代许可证义务。
+
+## 自动更新
+
+安装具备更新功能的版本后，在**关于**或**设置 → 软件更新**点击“检查更新”。默认启动时检查，并每小时判断是否已过 24 小时；成功或失败的自动检查都限流，每天最多一次。发现新版会保留侧栏提示，可查看说明并点击“下载并安装”。关闭自动检查不影响手动检查，设置需点击保存。
+
+更新清单来自本项目 GitHub Release 的 `latest.json`，HTTPS 访问通过内置 GhBoost 的任务代理。只接受本项目 Release 下载地址，Tauri 验证更新签名及签名绑定的版本；签名不匹配时不安装。安装前取得跨进程锁，拒绝正在运行或排队的备份；安装期间也拒绝新备份。下载最多等待 240 秒，校验完成后停止代理，再启动安装器并退出，安装后重新启动。不会替换数据库或清除任务。
+
+首次从没有更新功能的旧版本升级，需手动安装一次新版。Tauri 更新签名与 Windows Authenticode 代码签名不同，当前安装器仍可能显示 SmartScreen 提示。
+
+构建签名更新包需要环境变量 `TAURI_SIGNING_PRIVATE_KEY`，然后执行：
+
+```powershell
+./scripts/build.ps1 -Version 0.1.1 -SignUpdates
+./scripts/prepare-update-manifest.ps1 -Version 0.1.1
+```
+
+仓库 Actions 还需 `TAURI_SIGNING_PRIVATE_KEY` Secret；使用密码保护的私钥时另设 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。项目已经配置更新签名 Secret，公钥写在 `tauri.conf.json`。本机私钥位于忽略的 `.deps/update-signing/`，另有当前用户 DPAPI 备份 `%LOCALAPPDATA%\GhArchiveBuild\updater-signing.key.dpapi`，不要提交、公开或随意重新生成。详细机制见 [Tauri 官方更新文档](https://v2.tauri.app/plugin/updater/)。
 
 ## 项目结构
 

@@ -507,6 +507,7 @@ async fn perform(s: &Store, t: &Task) -> Outcome {
     outcome
 }
 pub async fn run(s: &Store, id: i64) -> Result<Value> {
+    let _activity = crate::update::activity_lock(s, false)?;
     let _lock = lock(s, id)?;
     let t = s.task(id)?;
     let run_id = loop {

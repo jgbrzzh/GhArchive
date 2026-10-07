@@ -108,6 +108,8 @@ impl Store {
             ("start_minimized", json!(false)),
             ("theme", json!("dark")),
             ("accepted_notice", json!(false)),
+            ("auto_check_updates", json!(true)),
+            ("update_last_check", json!(0)),
         ] {
             db.execute(
                 "INSERT OR IGNORE INTO settings VALUES(?1,?2)",
@@ -177,9 +179,8 @@ impl Store {
                     )
                     .is_ok()
             }),
-            "require_hosts" | "paused" | "autostart" | "start_minimized" | "accepted_notice" => {
-                value.is_boolean()
-            }
+            "require_hosts" | "paused" | "autostart" | "start_minimized" | "accepted_notice"
+            | "auto_check_updates" => value.is_boolean(),
             "theme" => matches!(value.as_str(), Some("dark" | "light" | "system")),
             _ => false,
         };

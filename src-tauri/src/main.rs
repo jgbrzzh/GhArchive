@@ -16,7 +16,10 @@ async fn action(
     name: String,
     payload: Value,
 ) -> std::result::Result<Envelope, String> {
-    let result = if name == "github" {
+    let result = if name == "update-check" || name == "update-install" {
+        gharchive::update::action(&app, &s, name == "update-install", payload["force"] == true)
+            .await
+    } else if name == "github" {
         app.opener()
             .open_url(gharchive::REPOSITORY, None::<&str>)
             .map(|_| json!(true))
@@ -71,6 +74,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_autostart::Builder::new()
                 .app_name("GhArchive")

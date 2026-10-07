@@ -5,7 +5,8 @@ GhArchive 应用代码为 GPL-3.0-only，完整许可见 LICENSE。依赖版本�
 | 组件 | 用途 | 许可证 |
 | --- | --- | --- |
 | GhBoost core | GitHub 地址、环境、镜像与代理准备 | GPL-3.0-only |
-| Tauri / Tauri plugins | WebView2、托盘、自启、系统浏览器 | MIT / Apache-2.0 |
+| Tauri / Tauri plugins | WebView2、托盘、自启、系统浏览器、签名更新 | MIT / Apache-2.0 |
+| minisign-verify | 更新签名回归验证 | MIT |
 | Vue 3 | 界面 | MIT |
 | Vite / TypeScript | 前端构建 | MIT / Apache-2.0 |
 | Lucide | 界面图标 | ISC |

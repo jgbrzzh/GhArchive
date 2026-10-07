@@ -8,6 +8,11 @@ on:
         description: 'Explicit version matching manifests, e.g. 0.1.0'
         required: true
         type: string
+      publish:
+        description: 'Publish a GitHub Release and latest.json for automatic updates'
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -15,6 +20,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    outputs:
+      version: ${{ steps.core.outputs.version }}
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -27,9 +34,12 @@ jobs:
         env:
           VERSION: ${{ inputs.version || github.ref_name }}
           CORE_TOKEN: ${{ secrets.GHBOOST_READ_TOKEN }}
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           ./scripts/verify-version.ps1 -Version $env:VERSION
           if ([string]::IsNullOrEmpty($env:CORE_TOKEN)) { throw 'Set repository secret GHBOOST_READ_TOKEN with read access to private GhBoost before packaging.' }
+          if ([string]::IsNullOrEmpty($env:SIGNING_KEY)) { throw 'Set TAURI_SIGNING_PRIVATE_KEY before building signed updates.' }
+          "version=$($env:VERSION -replace '^v','')" >> $env:GITHUB_OUTPUT
           $lock = Get-Content ghboost-core.lock.json -Raw | ConvertFrom-Json
           "revision=$($lock.revision)" >> $env:GITHUB_OUTPUT
           "repository=$($lock.repository)" >> $env:GITHUB_OUTPUT
@@ -49,15 +59,19 @@ jobs:
       - name: Build explicit version
         env:
           VERSION: ${{ inputs.version || github.ref_name }}
-        run: ./scripts/build.ps1 -Version $env:VERSION
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: ./scripts/build.ps1 -Version $env:VERSION -SignUpdates
       - run: ./scripts/test-cli.ps1 -Exe src-tauri/target/release/gharchive.exe
       - name: Gather portable executables, installers and checksums
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           Copy-Item src-tauri/target/release/gharchive.exe,src-tauri/target/release/gharchive-desktop.exe artifacts/
-          Get-ChildItem src-tauri/target/release/bundle -Recurse -File | Where-Object Extension -in '.exe','.msi' | Copy-Item -Destination artifacts/
+          $version = '${{ steps.core.outputs.version }}'
+          Get-ChildItem src-tauri/target/release/bundle -Recurse -File | Where-Object { $_.Extension -in '.exe','.msi' -and $_.Name -like "GhArchive_$($version)_*" } | Copy-Item -Destination artifacts/
           Copy-Item LICENSE,README.md,THIRD_PARTY_NOTICES.md artifacts/
+          ./scripts/prepare-update-manifest.ps1 -Version '${{ steps.core.outputs.version }}'
           Get-ChildItem artifacts -File | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(),$_.Name } | Set-Content artifacts/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -65,3 +79,31 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 7
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: GhArchive-windows-x64-${{ inputs.version }}
+          path: artifacts
+      - name: Publish signed update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: v${{ needs.build.outputs.version }}
+          REVISION: ${{ github.sha }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite signed update assets.' >&2
+            exit 1
+          fi
+          if [[ "$TAG" == *-* ]]; then
+            gh release create "$TAG" artifacts/* --target "$REVISION" --title "GhArchive $TAG" --generate-notes --prerelease
+          else
+            gh release create "$TAG" artifacts/* --target "$REVISION" --title "GhArchive $TAG" --generate-notes --latest
+          fi

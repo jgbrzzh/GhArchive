@@ -94,7 +94,7 @@ pub fn describe() -> Value {
         "json":"所有命令支持 --json；响应含 success,data,error,timestamp。daemon 是常驻命令，退出时返回 JSON。",
         "exit_codes":{"0":"success","1":"invalid_argument","2":"permission_denied","3":"network_error","4":"not_found","5":"internal_error"},
         "task_schema":{"name":"string","repo_url":"string","backup_dir":"absolute path","schedule_time":"HH:mm","enabled":"bool","use_proxy":"bool","use_mirror":"bool","notes":"string"},
-        "config_keys":["backup_root","concurrency","timeout_seconds","retries","retry_delay_seconds","minimum_free_bytes","mirror_url","require_hosts","paused","autostart","start_minimized","theme","accepted_notice","token"],
+        "config_keys":["backup_root","concurrency","timeout_seconds","retries","retry_delay_seconds","minimum_free_bytes","mirror_url","require_hosts","paused","autostart","start_minimized","theme","accepted_notice","auto_check_updates","token"],
         "examples":["gharchive add octocat/Hello-World --time 03:00 --dir D:\\backups --json","gharchive config set accepted_notice true --json","gharchive run 1 --json","gharchive remove 1 --yes --json"]})
 }
 pub async fn action(s: &Store, name: &str, p: Value) -> Result<Value> {

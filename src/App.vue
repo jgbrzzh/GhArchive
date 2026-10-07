@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   Archive,
   ArrowUpRight,
@@ -23,10 +24,12 @@ import {
   Download,
   Terminal,
   HardDrive,
+  Info,
 } from '@lucide/vue';
 import GitHubIcon from './components/GitHubIcon.vue';
 import appIcon from './assets/gharchive.svg';
 import packageInfo from '../package.json';
+import coreInfo from '../ghboost-core.lock.json';
 type Task = {
   id: number;
   name: string;
@@ -69,6 +72,7 @@ type Config = {
   theme: string;
   accepted_notice: boolean;
   token_configured: boolean;
+  auto_check_updates: boolean;
 };
 const desktop = isTauri();
 const repository = 'https://github.com/jgbrzzh/GhArchive';
@@ -77,6 +81,7 @@ const pages = [
   { id: 'tasks', name: '备份任务', icon: Archive },
   { id: 'history', name: '运行历史', icon: History },
   { id: 'settings', name: '设置', icon: Settings2 },
+  { id: 'about', name: '关于', icon: Info },
 ];
 const page = ref('dashboard');
 const tasks = ref<Task[]>([]);
@@ -107,6 +112,7 @@ const config = reactive<Config>({
   theme: 'dark',
   accepted_notice: false,
   token_configured: false,
+  auto_check_updates: true,
 });
 const title = computed(() => pages.find((p) => p.id === page.value)?.name);
 const visibleTasks = computed(() =>
@@ -121,6 +127,13 @@ const busy = ref(false);
 const running = reactive(new Set<number>());
 const error = ref('');
 const toast = ref('');
+type UpdateInfo = { checked: boolean; available?: boolean; version?: string; notes?: string };
+const updateInfo = ref<UpdateInfo | null>(null);
+const updateBusy = ref(false);
+const updateInstalling = ref(false);
+const updateStatus = ref('尚未检查更新');
+let updateTimer: ReturnType<typeof setInterval>;
+let unlistenUpdate: UnlistenFn | undefined;
 const notice = ref(false);
 const modal = ref(false);
 const editing = ref<number | null>(null);
@@ -272,6 +285,7 @@ async function accept() {
   try {
     await call('set', { key: 'accepted_notice', value: true });
     config.accepted_notice = true;
+    void checkUpdates(false);
     notice.value = false;
   } catch (e) {
     fail(e);
@@ -292,6 +306,7 @@ async function saveSettings() {
       'start_minimized',
       'theme',
       'autostart',
+      'auto_check_updates',
     ] as const) {
       await call('set', { key, value: config[key] });
     }
@@ -343,12 +358,69 @@ async function exportHistory() {
     fail(e);
   }
 }
+async function checkUpdates(force = true) {
+  if (!desktop || updateBusy.value || !config.accepted_notice) return;
+  updateBusy.value = true;
+  if (force) updateStatus.value = '正在检查更新…';
+  try {
+    const result = await call<UpdateInfo>('update-check', { force });
+    if (result.checked) {
+      updateInfo.value = result;
+      updateStatus.value = result.available ? `发现新版本 v${result.version}` : '当前已是最新版本';
+      if (result.available && !force)
+        message(`发现 GhArchive v${result.version}，可在设置中安装更新`);
+    }
+  } catch (e) {
+    updateStatus.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    updateBusy.value = false;
+  }
+}
+async function installUpdate() {
+  if (
+    !window.confirm(
+      '下载并验证更新后，GhArchive 将关闭并启动安装程序。备份任务运行时不能安装。是否继续？',
+    )
+  )
+    return;
+  updateBusy.value = true;
+  updateInstalling.value = true;
+  updateStatus.value = '正在准备更新…';
+  try {
+    const result = await call<UpdateInfo>('update-install');
+    if (!result.available) {
+      updateInfo.value = result;
+      updateStatus.value = '当前已是最新版本';
+    }
+  } catch (e) {
+    updateStatus.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    updateBusy.value = false;
+    updateInstalling.value = false;
+  }
+}
 onMounted(async () => {
+  if (desktop)
+    unlistenUpdate = await listen<{ phase: string; downloaded?: number; total?: number }>(
+      'update-progress',
+      ({ payload }) => {
+        updateStatus.value =
+          payload.phase === 'download'
+            ? `正在下载：${bytes(payload.downloaded || 0)}${payload.total ? ` / ${bytes(payload.total)}` : ''}`
+            : payload.phase === 'verify'
+              ? '正在验证更新签名…'
+              : '正在启动安装程序…';
+      },
+    );
   await refresh(true);
+  void checkUpdates(false);
+  updateTimer = setInterval(() => void checkUpdates(false), 3600000);
   timer = setInterval(() => refresh(), 5000);
   clock = setInterval(() => (now.value = Date.now()), 1000);
 });
 onUnmounted(() => {
+  clearInterval(updateTimer);
+  unlistenUpdate?.();
   clearInterval(timer);
   clearInterval(clock);
 });
@@ -380,6 +452,9 @@ onUnmounted(() => {
         </div>
         <small>GhBoost 访问 · 本地备份</small>
         <div class="sidebar-version">
+          <button v-if="updateInfo?.available" class="text-button" @click="page = 'settings'">
+            发现新版 v{{ updateInfo.version }}
+          </button>
           GhArchive <span>v{{ packageInfo.version }}</span>
         </div>
       </div>
@@ -426,7 +501,9 @@ onUnmounted(() => {
                     ? '按仓库安排每日备份，首次完整镜像，后续增量更新。'
                     : page === 'history'
                       ? '每次运行的结果、耗时和输出，都可以在这里追溯。'
-                      : '为你的备份习惯，设置合适的运行方式。'
+                      : page === 'about'
+                        ? '版本信息、项目主页与软件更新。'
+                        : '为你的备份习惯，设置合适的运行方式。'
               }}
             </p>
           </div>
@@ -810,9 +887,72 @@ onUnmounted(() => {
               >
             </div>
           </section>
+          <section class="settings-section">
+            <div>
+              <h2>软件更新</h2>
+              <p>当前版本 v{{ packageInfo.version }}</p>
+            </div>
+            <div class="panel settings-fields">
+              <label class="toggle-row"
+                ><span>自动检查更新<small>每天最多自动检查一次，发现新版后提示安装。</small></span
+                ><span class="switch"
+                  ><input v-model="config.auto_check_updates" type="checkbox" /><span></span></span
+              ></label>
+              <p role="status" aria-live="polite">{{ updateStatus }}</p>
+              <p v-if="updateInfo?.notes" class="update-notes">{{ updateInfo.notes }}</p>
+              <div class="update-actions">
+                <button :disabled="!desktop || updateBusy" @click="checkUpdates(true)">
+                  <RefreshCw :size="16" />{{
+                    updateBusy && !updateInstalling ? '检查中…' : '检查更新'
+                  }}
+                </button>
+                <button
+                  v-if="updateInfo?.available"
+                  :disabled="updateBusy || stats.running > 0"
+                  @click="installUpdate"
+                >
+                  <Download :size="16" />{{ updateInstalling ? '更新中…' : '下载并安装' }}
+                </button>
+              </div>
+              <small>更新包通过签名验证。安装时关闭应用，完成后重新启动。</small>
+            </div>
+          </section>
           <div class="settings-footer">
             <ShieldCheck :size="17" />所有任务与运行历史保存在本机。
           </div>
+        </template>
+        <template v-if="page === 'about'">
+          <section class="settings-section">
+            <div>
+              <h2>GhArchive</h2>
+              <p>GitHub 仓库定时备份器</p>
+            </div>
+            <div class="panel settings-fields about-fields">
+              <p>软件版本：v{{ packageInfo.version }}</p>
+              <p>GhBoost 核心：v{{ coreInfo.version }} · {{ coreInfo.revision.slice(0, 7) }}</p>
+              <p>开源协议：GPL-3.0-only</p>
+              <button @click="openGithub"><ArrowUpRight :size="16" />项目 GitHub 主页</button>
+              <p role="status" aria-live="polite">{{ updateStatus }}</p>
+              <p v-if="updateInfo?.notes" class="update-notes">{{ updateInfo.notes }}</p>
+              <div class="update-actions">
+                <button :disabled="!desktop || updateBusy" @click="checkUpdates(true)">
+                  <RefreshCw :size="16" />{{
+                    updateBusy && !updateInstalling ? '检查中…' : '检查更新'
+                  }}
+                </button>
+                <button
+                  v-if="updateInfo?.available"
+                  :disabled="updateBusy || stats.running > 0"
+                  @click="installUpdate"
+                >
+                  <Download :size="16" />{{ updateInstalling ? '更新中…' : '下载并安装' }}
+                </button>
+              </div>
+              <small
+                >自动检查可在设置中关闭。更新安装前会验证签名，且不会中断正在运行的备份。</small
+              >
+            </div>
+          </section>
         </template>
       </div>
       <footer>

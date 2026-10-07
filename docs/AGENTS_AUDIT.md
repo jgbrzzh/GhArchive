@@ -5,7 +5,7 @@
 | 要求 | 实现与验收情况 |
 | --- | --- |
 | GhArchive 独立项目，禁止改动 GhBoost | 符合。只读取远端核心快照；GhBoost 没有新增、修改或推送文件。 |
-| 私有核心复制到 `.deps`，固定来源提交 | 符合。`ghboost-core.lock.json` 锁定 `00710891d5cc882681538167be060e7e48707aed`，核心 0.1.1；Cargo 路径依赖，`.deps` 被忽略。 |
+| 私有核心复制到 `.deps`，固定来源提交 | 符合。`ghboost-core.lock.json` 锁定 `5533732011b90dbc681056a74bff3a3b9edc0ee7`，核心 0.1.2；Cargo 路径依赖，`.deps` 被忽略。 |
 | 自动调用内置 GhBoost 获取仓库 | 此前存在缺口，本轮修复。默认 GUI/CLI/调度任务调用核心优选、启动任务代理、生成 Git URL/环境；不依赖外部 GhBoost 软件。 |
 | 不重复实现加速、不静默写 Hosts | 符合。DNS/HTTPS 优选和代理路由来自核心；应用只管理生命周期。不修改系统 PAC/代理，Hosts 接口只做已有配置检查。 |
 | 四种仓库输入格式 | 符合。统一经核心规范化为 HTTPS，再验证 owner/repo 和 Windows 目录名。 |
@@ -22,7 +22,8 @@
 | 右上角 GitHub 图标、默认浏览器 | 符合实现。点击经 Tauri opener 打开项目公开仓库，此前 GUI 动作已验证。 |
 | GPL-3.0-only、公开仓库资料 | LICENSE、README、贡献/行为/安全说明、变更记录、第三方说明、Issue/PR 模板、CODEOWNERS 已收录；公开仓库无法缺少私有核心独立构建，README 已说明依赖与分发边界。 |
 | 不推 AGENTS.md/核心/凭据/本地产物 | 符合当前跟踪清单和忽略规则检查。测试、日志、截图、安装包位于忽略目录。 |
-| Actions 节省用量、普通提交只检查 | 符合。路径过滤、取消过期检查、普通提交只做前端/Rust 检查；版本标签或手动明确版本才执行 EXE/MSI 构建。不自动发布 Release。 |
+| Actions 节省用量、普通提交只检查 | 符合。路径过滤、取消过期检查、普通提交只做前端/Rust 检查；版本标签或手动明确版本才执行 EXE/MSI 构建。手动发布开关默认关闭，明确版本并启用后提供 Release 更新源。 |
+| 自动更新与关于页 | 已实现。每天自动检查一次，设置/关于页提供手动检查和安装；验证签名及签名绑定的版本，更新与备份使用跨进程互斥。关于页浏览器预览及实际签名下载验证完成，尚未执行原地安装/重启。 |
 | 私有核心凭据缺失明确报告 | 符合工作流。没有 GHBOOST_READ_TOKEN 时明确跳过 Rust；版本构建缺凭据直接失败。目前仓库没有配置该 Secret，云端 Rust 与安装包构建未验收。 |
 | 测试、前端构建、Windows 安装包 | 结果记录于 VALIDATION.md。本轮增加代理并发、取消清理和禁止静默直连测试；安装包不等同于全新机器安装/卸载通过。 |
 | 不引入 HTTP 管理 API 或 MCP | 符合。只有 Tauri IPC 与 CLI；本机 CONNECT 传输来自既有核心，不新增应用管理服务。 |
@@ -31,7 +32,7 @@
 
 - 新版生产 GUI 的实际操作、真实 Windows 重新登录后的自启与定时运行。
 - 配置专用私有核心只读凭据后，云端 Rust 检查和显式版本安装包构建。
-- 全新 Windows 环境安装/卸载、签名及 SmartScreen 验收。当前产物未签名。
+- 全新 Windows 环境安装/卸载、Authenticode 与 SmartScreen 验收。更新包有 Tauri 签名，但未进行 Windows 代码签名；尚未执行原地更新安装器。
 - 本轮真实公开仓库成功不代表私有 Token、第三方镜像、Git LFS/子模块或 Release 附件得到完整备份；LFS 对象、子模块内容、附件不在此 Git 镜像备份范围。
 
 文件树见 [FILE_TREE.md](FILE_TREE.md)，依赖关系见 [GHBOOST_INTEGRATION.md](../GHBOOST_INTEGRATION.md)，运行、打包与 CLI 示例见 [README.md](../README.md)。

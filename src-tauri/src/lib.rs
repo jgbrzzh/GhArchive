@@ -4,6 +4,7 @@ pub mod cli;
 pub mod db;
 pub mod scheduler;
 pub mod secrets;
+pub mod update;
 pub use ghboost_core::{Envelope, Failure, Result};
 pub fn response(result: Result<serde_json::Value>) -> Envelope {
     let mut e = Envelope::from_result(result);

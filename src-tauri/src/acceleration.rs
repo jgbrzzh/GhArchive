@@ -71,6 +71,12 @@ struct OwnedProxy {
 
 impl OwnedProxy {
     async fn start(store: CoreStore) -> Result<Self> {
+        if store.get("proxy_tls_mode")? != "tunnel" {
+            return Err(Failure::new(
+                2,
+                "GhArchive 自动代理仅使用端到端 TLS；请检查任务核心配置",
+            ));
+        }
         if proxy::status(&store)?["running"] == true {
             return Err(Failure::new(1, "该任务的内置 GhBoost 代理已有实例运行"));
         }

@@ -1,10 +1,19 @@
 # 验收记录
 
-日期：2026-10-07，北京时间。平台：Windows x64，Rust 1.98.1、Node.js 24.19.0，应用版本 0.1.0。
+日期：2026-10-07，北京时间。平台：Windows x64，Rust 1.98.1、Node.js 24.19.0，当前应用版本 0.1.1。以下保留旧版本历史记录。
 
-当前依赖已同步到 GhBoost 远端提交 `00710891d5cc882681538167be060e7e48707aed`，核心 0.1.1，包含代理路由 TLS 验证。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。默认任务现已自动调用核心 DNS/HTTPS 优选和任务专用代理，不依赖外部 GhBoost 软件，不修改系统 PAC/代理或 Hosts。
+当前依赖已同步到 GhBoost 远端提交 `5533732011b90dbc681056a74bff3a3b9edc0ee7`，核心 0.1.2。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。默认任务自动调用核心 DNS/HTTPS 优选和任务专用代理，不依赖外部 GhBoost 软件，不修改系统 PAC/代理或 Hosts，也不自动启用 SNI/安装根证书。
 
 下面的真实网络和 GUI/托盘验收记录来自首轮 `e289a0c00f23bb547fa26e374b6fb012ec0dcf20` 构建；新核心的构建与 CLI 复验单独记录，不能据此声称重新操作了 GUI 或重启电脑。
+
+## 0.1.1 签名更新与核心 0.1.2
+
+- 14 个应用库测试通过，新增签名篡改拒绝、官方更新 URL 限制、24 小时检查频率、跨进程锁互斥回归。CLI smoke、fmt、all-targets check、前端格式和生产构建通过。
+- 本地 `scripts/build.ps1 -Version 0.1.1 -SignUpdates` 完成 NSIS EXE、MSI 与两个版本绑定的更新签名；`prepare-update-manifest.ps1` 在 Windows PowerShell 5.1 生成无 BOM 的 latest.json，包含 NSIS/MSI 平台与默认 NSIS 回退项，只选择当前版本产物。
+- 通过 Tauri MockRuntime 及本机测试 HTTP 服务，使用实际安装包验证 updater 的 check/download：正常包签名验证通过、篡改字节失败、清单版本与签名版本不一致失败。测试 HTTP 仅存在于忽略的诊断程序，生产配置仍只接受 HTTPS；没有执行安装器，不据此声称安装重启已验收。
+- 关于页浏览器预览显示 v0.1.1、核心 v0.1.2 与提交来源，以及“检查更新”按钮。浏览器按钮按设计禁用，不连接 Rust；新版生产 WebView 未再次操作。预览结束后已停止测试浏览器和 Vite，避免 Windows 构建占用 esbuild.exe。
+- 核心 `3935ecc` 下（与最终固定的 `5533732` 核心文件逐一 SHA256 比对一致，后者只更新 GhBoost 打包脚本），22:28:15–22:28:34 首次 clone 小仓库成功。随后禁用重试的增量优选全失败、指定大仓库增量出现 Schannel 握手失败。恢复默认 3 次重试后，22:30:00–22:30:16 小仓库增量、22:30:16–22:30:31 大仓库增量均一次成功。网络仍会波动，未改变 Clash、Hosts 或全局 Git 配置。
+- 私钥只在忽略目录、当前用户 DPAPI 备份和 GitHub Secret 保存；公钥与测试签名可公开。没有配置 GHBOOST_READ_TOKEN 时云端 Rust 仍明确跳过，云端打包缺私有核心权限会失败；本次发布使用本机固定核心构建，不使用宽权限个人 Token 作为私有核心 Secret。
 
 ## `00710891` 内置核心自动调用复验
 
@@ -38,7 +47,7 @@
 
 | 项目 | 实际结果 |
 | --- | --- |
-| `cargo test --manifest-path src-tauri/Cargo.toml --locked` | 当前 10 个库测试通过，CLI/GUI 测试目标和 doc-tests 通过 |
+| `cargo test --manifest-path src-tauri/Cargo.toml --locked` | 当前 14 个库测试通过，CLI/GUI 测试目标和 doc-tests 通过 |
 | `cargo check --manifest-path src-tauri/Cargo.toml --all-targets --locked` | 通过 |
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | 通过 |
 | `npm run build` | TypeScript 检查与 Vite 打包通过 |

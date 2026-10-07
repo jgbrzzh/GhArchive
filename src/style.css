@@ -1010,3 +1010,25 @@ footer .dot {
     display: none;
   }
 }
+.update-actions {
+  display: flex;
+  gap: 12px;
+}
+.about-fields {
+  gap: 16px;
+}
+.about-fields p {
+  margin: 0;
+  line-height: 1.7;
+}
+.update-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.update-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+}
