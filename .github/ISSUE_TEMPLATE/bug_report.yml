@@ -1,0 +1,21 @@
+name: Bug report
+description: Report a reproducible GhArchive problem
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version and Windows version
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include expected and actual behavior. Remove tokens and private repository names.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      render: text

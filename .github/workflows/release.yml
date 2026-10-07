@@ -1,0 +1,67 @@
+name: Explicit version Windows build
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Explicit version matching manifests, e.g. 0.1.0'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate version and private core access before expensive work
+        id: core
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+          CORE_TOKEN: ${{ secrets.GHBOOST_READ_TOKEN }}
+        run: |
+          ./scripts/verify-version.ps1 -Version $env:VERSION
+          if ([string]::IsNullOrEmpty($env:CORE_TOKEN)) { throw 'Set repository secret GHBOOST_READ_TOKEN with read access to private GhBoost before packaging.' }
+          $lock = Get-Content ghboost-core.lock.json -Raw | ConvertFrom-Json
+          "revision=$($lock.revision)" >> $env:GITHUB_OUTPUT
+          "repository=$($lock.repository)" >> $env:GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.core.outputs.repository }}
+          ref: ${{ steps.core.outputs.revision }}
+          token: ${{ secrets.GHBOOST_READ_TOKEN }}
+          path: .deps/ghboost-source
+          persist-credentials: false
+      - run: ./scripts/prepare-core.ps1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build explicit version
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+        run: ./scripts/build.ps1 -Version $env:VERSION
+      - run: ./scripts/test-cli.ps1 -Exe src-tauri/target/release/gharchive.exe
+      - name: Gather portable executables, installers and checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item src-tauri/target/release/gharchive.exe,src-tauri/target/release/gharchive-desktop.exe artifacts/
+          Get-ChildItem src-tauri/target/release/bundle -Recurse -File | Where-Object Extension -in '.exe','.msi' | Copy-Item -Destination artifacts/
+          Copy-Item LICENSE,README.md,THIRD_PARTY_NOTICES.md artifacts/
+          Get-ChildItem artifacts -File | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(),$_.Name } | Set-Content artifacts/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GhArchive-windows-x64-${{ inputs.version || github.ref_name }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7

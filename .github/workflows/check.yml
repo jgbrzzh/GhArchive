@@ -1,0 +1,62 @@
+name: Checks
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'src-tauri/**', 'scripts/**', 'package*.json', 'tsconfig.json', 'vite.config.ts', 'ghboost-core.lock.json', '.github/workflows/**']
+  pull_request:
+    branches: [main]
+    paths: ['src/**', 'src-tauri/**', 'scripts/**', 'package*.json', 'tsconfig.json', 'vite.config.ts', 'ghboost-core.lock.json', '.github/workflows/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run build
+      - name: Determine private core availability
+        id: core
+        shell: pwsh
+        env:
+          CORE_TOKEN: ${{ secrets.GHBOOST_READ_TOKEN }}
+          TRUSTED: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          $lock = Get-Content ghboost-core.lock.json -Raw | ConvertFrom-Json
+          "revision=$($lock.revision)" >> $env:GITHUB_OUTPUT
+          "repository=$($lock.repository)" >> $env:GITHUB_OUTPUT
+          $available = ![string]::IsNullOrEmpty($env:CORE_TOKEN) -and $env:TRUSTED -eq 'true'
+          "available=$($available.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if (!$available) { '### Frontend passed. Rust checks skipped: private GhBoost core read access is required. Configure GHBOOST_READ_TOKEN; fork PRs never receive this secret.' >> $env:GITHUB_STEP_SUMMARY }
+      - uses: actions/checkout@v4
+        if: steps.core.outputs.available == 'true'
+        with:
+          repository: ${{ steps.core.outputs.repository }}
+          ref: ${{ steps.core.outputs.revision }}
+          token: ${{ secrets.GHBOOST_READ_TOKEN }}
+          path: .deps/ghboost-source
+          persist-credentials: false
+      - if: steps.core.outputs.available == 'true'
+        run: ./scripts/prepare-core.ps1
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.core.outputs.available == 'true'
+        with:
+          components: rustfmt
+      - if: steps.core.outputs.available == 'true'
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - if: steps.core.outputs.available == 'true'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --lib --locked
+      - if: steps.core.outputs.available == 'true'
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --locked

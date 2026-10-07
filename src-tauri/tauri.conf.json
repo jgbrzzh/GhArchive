@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GhArchive",
+  "version": "0.1.0",
+  "mainBinaryName": "gharchive-desktop",
+  "identifier": "io.github.jgbrzzh.gharchive",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1427",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "GhArchive · GitHub 仓库备份",
+        "width": 1180,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 650
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "publisher": "GhArchive contributors",
+    "category": "DeveloperTool",
+    "shortDescription": "定时备份 GitHub 仓库到本地",
+    "license": "GPL-3.0-only",
+    "windows": {
+      "nsis": {
+        "installerHooks": "installer-hooks.nsh",
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"]
+      },
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true }
+    }
+  }
+}
