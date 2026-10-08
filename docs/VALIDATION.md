@@ -1,5 +1,15 @@
 # 验收记录
 
+## 2026-10-08：批量导入与其他 Git 服务（开发版）
+
+- 文字识别复用 GhBoost 的 GitHub 地址接口；增加其他服务的 HTTPS `.git` 地址校验。用户提供的 30 个地址全部识别，Markdown 标签/目标合并 30 次重复，清除查询参数；不联网判定仓库是否存在。文本上限 1 MiB，每批最多 500 个仓库。
+- 22 个 Rust 库测试通过，覆盖整批失败不写入、重复/已有任务跳过、GitHub 大小写无关去重、其他服务路径大小写保留、URL 指纹避免 Windows 镜像路径混用、SSH/转义/参数、目录安全与 GitHub Token 不发送到其他站点。
+- CLI 构建、all-targets check、格式及前端生产构建通过。Windows PowerShell CLI smoke 在隔离目录导入 30 项、重复导入全部跳过、非法时间不改变任务；测试任务全部禁用。UTF-8 文件与 stdin 预览可用。
+- `https://git.xeondev.com/LR/S.git` 实际首次 mirror clone 及后续增量 fetch/remote update 均退出码 0，镜像 HEAD `936df33f69f7af2d2ddf52e650521e2667df0256`。证据在 output/xeondev-validation，未修改 GhBoost 或系统网络配置。
+- Playwright 用真实 CLI 识别输出作为测试 IPC 响应，验证预览、全选/清空、取消单项、统一参数、确认提交与关闭弹窗；这是前端交互测试，未在原生 WebView 中操作。截图在 output/playwright/batch-import-*.png。
+- 本地 Tauri 构建 `build --no-bundle -- --locked` 通过。未创建版本标签或发布新安装包；v0.1.1 Release 保留原产物。
+- Vite 开发预览曾因监听 Rust 编译产物遇到 EBUSY，已将 src-tauri、私有依赖及产物目录加入 watch 忽略列表。
+
 日期：2026-10-07，北京时间。平台：Windows x64，Rust 1.98.1、Node.js 24.19.0，当前应用版本 0.1.1。以下保留旧版本历史记录。
 
 当前依赖已同步到 GhBoost 远端提交 `5533732011b90dbc681056a74bff3a3b9edc0ee7`，核心 0.1.2。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。默认任务自动调用核心 DNS/HTTPS 优选和任务专用代理，不依赖外部 GhBoost 软件，不修改系统 PAC/代理或 Hosts，也不自动启用 SNI/安装根证书。

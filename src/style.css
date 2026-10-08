@@ -853,6 +853,67 @@ footer .dot {
   justify-content: space-between;
   align-items: center;
 }
+.import-dialog {
+  width: 760px;
+}
+.import-settings {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.import-candidates {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.import-candidate {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+}
+.import-candidate + .import-candidate {
+  border-top: 1px solid var(--line);
+}
+.import-candidate input {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: #51b98e;
+}
+.import-candidate span,
+.import-rejected p {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.import-selection-actions {
+  display: flex;
+  gap: 18px;
+}
+.import-summary {
+  color: var(--muted);
+  font-size: 12px;
+}
+.import-rejected summary {
+  cursor: pointer;
+}
+.import-rejected p {
+  margin: 12px 0;
+  font-size: 12px;
+}
+.import-rejected small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.import-error {
+  color: #f38d8d;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .dialog-heading h2 {
   font-size: 18px;
 }

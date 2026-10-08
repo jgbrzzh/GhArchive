@@ -152,6 +152,63 @@ const emptyTask = () => ({
   notes: '',
 });
 const form = reactive(emptyTask());
+type ImportPreview = {
+  repositories: { repo_url: string; name: string; exists: boolean }[];
+  duplicates: number;
+  rejected: { link: string; reason: string }[];
+};
+const importModal = ref(false);
+const importText = ref('');
+const importPreview = ref<ImportPreview | null>(null);
+const importSelection = ref<string[]>([]);
+const importBusy = ref(false);
+const importError = ref('');
+const importSettings = reactive(emptyTask());
+const importSelectable = computed(
+  () => importPreview.value?.repositories.filter((r) => !r.exists) || [],
+);
+function openImport() {
+  importText.value = '';
+  resetImportPreview();
+  Object.assign(importSettings, emptyTask());
+  importModal.value = true;
+}
+function resetImportPreview() {
+  importPreview.value = null;
+  importSelection.value = [];
+  importError.value = '';
+}
+async function previewImport() {
+  importBusy.value = true;
+  importError.value = '';
+  try {
+    importPreview.value = await call<ImportPreview>('import-preview', { text: importText.value });
+    importSelection.value = importSelectable.value.map((r) => r.repo_url);
+  } catch (e) {
+    importError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    importBusy.value = false;
+  }
+}
+async function saveImport() {
+  importBusy.value = true;
+  importError.value = '';
+  try {
+    const result = await call<{ created_ids: number[]; skipped: string[] }>('import', {
+      repositories: importSelection.value,
+      settings: { ...importSettings },
+    });
+    importModal.value = false;
+    message(
+      `已导入 ${result.created_ids.length} 个任务${result.skipped.length ? `，跳过 ${result.skipped.length} 个已有任务` : ''}`,
+    );
+    await refresh();
+  } catch (e) {
+    importError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    importBusy.value = false;
+  }
+}
 let timer: ReturnType<typeof setInterval>;
 let clock: ReturnType<typeof setInterval>;
 const countdown = computed(() => {
@@ -635,6 +692,9 @@ onUnmounted(() => {
 
         <template v-if="page === 'tasks'">
           <div class="toolbar">
+            <button :disabled="!desktop" @click="openImport">
+              <Download :size="16" />批量导入
+            </button>
             <label class="search"
               ><Search :size="17" /><input
                 v-model="search"
@@ -982,6 +1042,137 @@ onUnmounted(() => {
       <button class="primary" @click="accept">我已了解，开始使用</button>
     </section>
   </div>
+  <div v-if="importModal" class="overlay" @click.self="!importBusy && (importModal = false)">
+    <form
+      class="dialog import-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-title"
+      @submit.prevent="saveImport"
+    >
+      <div class="dialog-heading">
+        <h2 id="import-title">批量导入备份任务</h2>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="关闭批量导入"
+          :disabled="importBusy"
+          @click="importModal = false"
+        >
+          <X :size="19" />
+        </button>
+      </div>
+      <label
+        >粘贴包含仓库链接的文字
+        <textarea
+          v-model="importText"
+          :disabled="importBusy"
+          rows="6"
+          placeholder="粘贴聊天内容、Markdown 清单或每行一个 owner/repo…"
+          @input="resetImportPreview"
+        />
+        <small
+          >识别 GitHub HTTPS / SSH 链接和 owner/repo，自动去掉查询参数并去重。每批最多 500
+          个仓库。</small
+        >
+      </label>
+      <button type="button" :disabled="importBusy || !importText.trim()" @click="previewImport">
+        <Search :size="16" />{{ importBusy ? '处理中…' : '识别仓库链接' }}
+      </button>
+      <p v-if="importError" class="import-error" role="alert">{{ importError }}</p>
+      <template v-if="importPreview">
+        <div class="import-summary" role="status">
+          识别 {{ importPreview.repositories.length }} 个仓库 · 合并
+          {{ importPreview.duplicates }} 个重复链接 · 已有
+          {{ importPreview.repositories.filter((r) => r.exists).length }} 个任务
+        </div>
+        <div v-if="importSelectable.length" class="import-selection-actions">
+          <button
+            type="button"
+            class="text-button"
+            :disabled="importBusy"
+            @click="importSelection = importSelectable.map((r) => r.repo_url)"
+          >
+            全选
+          </button>
+          <button
+            type="button"
+            class="text-button"
+            :disabled="importBusy"
+            @click="importSelection = []"
+          >
+            清空选择
+          </button>
+        </div>
+        <div v-if="importPreview.repositories.length" class="import-candidates">
+          <label
+            v-for="candidate in importPreview.repositories"
+            :key="candidate.repo_url"
+            class="import-candidate"
+          >
+            <input
+              v-model="importSelection"
+              type="checkbox"
+              :value="candidate.repo_url"
+              :disabled="candidate.exists || importBusy"
+            />
+            <span
+              >{{ candidate.repo_url }}<small v-if="candidate.exists">已有任务，将跳过</small></span
+            >
+          </label>
+        </div>
+        <p v-else class="muted-text">没有识别到可用的 Git 仓库链接。</p>
+        <details v-if="importPreview.rejected.length" class="import-rejected">
+          <summary>{{ importPreview.rejected.length }} 个地址无法导入</summary>
+          <p v-for="(item, index) in importPreview.rejected" :key="index">
+            {{ item.link }}<small>{{ item.reason }}</small>
+          </p>
+        </details>
+        <small
+          >仅识别地址格式，未检查仓库是否存在或可访问。导入创建计划任务，不立即备份；启用后按所选时间自动执行。加速、镜像和
+          GitHub Token 仅用于 GitHub，其他站点使用 Git 直连。</small
+        >
+        <fieldset :disabled="importBusy" class="import-settings">
+          <div class="field-grid">
+            <label
+              >每天执行时间<input v-model="importSettings.schedule_time" type="time" required
+            /></label>
+            <label class="toggle-row"
+              >启用任务<span class="switch"
+                ><input v-model="importSettings.enabled" type="checkbox" /><span></span></span
+            ></label>
+          </div>
+          <label
+            >备份根目录<input
+              v-model="importSettings.backup_dir"
+              required
+              placeholder="D:\backups"
+            /><small
+              >GitHub 按 owner/repo 保存；其他站点按主机、完整路径和 URL 指纹保存。</small
+            ></label
+          >
+          <div class="checkboxes">
+            <label
+              ><input v-model="importSettings.use_proxy" type="checkbox" />使用内置 GhBoost
+              加速</label
+            >
+            <label
+              ><input v-model="importSettings.use_mirror" type="checkbox" />使用公开仓库镜像</label
+            >
+          </div>
+          <label
+            >统一备注<textarea v-model="importSettings.notes" rows="2" maxlength="10000" />
+          </label>
+        </fieldset>
+      </template>
+      <div class="dialog-footer">
+        <button type="button" :disabled="importBusy" @click="importModal = false">取消</button>
+        <button type="submit" class="primary" :disabled="importBusy || !importSelection.length">
+          {{ importBusy ? '处理中…' : `导入 ${importSelection.length} 个任务` }}
+        </button>
+      </div>
+    </form>
+  </div>
   <div v-if="modal" class="overlay" @click.self="modal = false">
     <form
       class="dialog"
@@ -1002,7 +1193,9 @@ onUnmounted(() => {
           required
           placeholder="owner/repo 或 GitHub 链接"
           autofocus
-        /><small>支持 HTTPS、git@github.com:owner/repo.git 和 owner/repo。</small></label
+        /><small
+          >支持 GitHub HTTPS、SSH、owner/repo，以及其他 Git 服务的 HTTPS .git 链接。</small
+        ></label
       ><label
         >任务名称<input v-model="form.name" placeholder="留空使用仓库名称" maxlength="200"
       /></label>

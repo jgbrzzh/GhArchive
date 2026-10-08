@@ -23,29 +23,9 @@ use tokio::{
 };
 
 pub fn identity(url: &str) -> Result<(String, String)> {
-    let normalized = ghboost_core::prepare_git_url(url)?;
-    let parsed = url::Url::parse(&normalized).map_err(|e| Failure::new(1, e))?;
-    let parts: Vec<_> = parsed.path().trim_matches('/').split('/').collect();
-    if parts.len() != 2 {
-        return Err(Failure::new(1, "备份需要普通 GitHub owner/repo 仓库链接"));
-    }
-    let owner = parts[0].to_owned();
-    let repo = parts[1].trim_end_matches(".git").to_owned();
-    for name in [&owner, &repo] {
-        let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
-        if name.ends_with('.')
-            || [
-                "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
-                "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8",
-                "LPT9",
-            ]
-            .contains(&stem.as_str())
-        {
-            return Err(Failure::new(1, "仓库名称不能作为 Windows 目录名"));
-        }
-    }
-    Ok((owner, repo))
+    crate::repository::identity(url)
 }
+
 fn reject_links(path: &Path) -> Result<()> {
     for p in path.ancestors() {
         if let Ok(m) = std::fs::symlink_metadata(p) {
@@ -75,7 +55,7 @@ fn target(t: &Task, s: &Store) -> Result<PathBuf> {
     let parent = root.join(owner);
     reject_links(&parent)?;
     std::fs::create_dir_all(&parent)?;
-    let p = parent.join(format!("{repo}.git"));
+    let p = parent.join(crate::repository::mirror_name(&t.input.repo_url, &repo));
     reject_links(&p)?;
     if fs2::available_space(&parent)? < s.get("minimum_free_bytes")?.as_u64().unwrap() {
         return Err(Failure::new(2, "备份磁盘剩余空间不足"));
@@ -122,12 +102,23 @@ async fn prepare(
         },
         private_repository: token.is_some(),
     };
-    let url = ghboost_core::prepare_git_url_with_options(&t.input.repo_url, &options)?;
-    if s.get("require_hosts")? == true {
+    let normalized = crate::repository::normalize(&t.input.repo_url)?;
+    let github = crate::repository::is_github(&normalized);
+    let token = if github { token } else { None };
+    let options = GitOptions {
+        use_proxy: github && options.use_proxy,
+        mirror: if github { options.mirror } else { None },
+        private_repository: token.is_some(),
+    };
+    let url = if github {
+        ghboost_core::prepare_git_url_with_options(&normalized, &options)?
+    } else {
+        normalized.clone()
+    };
+    if github && s.get("require_hosts")? == true {
         ghboost_core::ensure_hosts_applied()?;
     }
-    let domain = url::Url::parse(&ghboost_core::prepare_git_url(&t.input.repo_url)?)
-        .map_err(|e| Failure::new(1, e))?;
+    let domain = url::Url::parse(&normalized).map_err(|e| Failure::new(1, e))?;
     let automatic = crate::acceleration::Connection::prepare(
         s,
         t.id,
@@ -325,16 +316,22 @@ async fn perform(s: &Store, t: &Task) -> Outcome {
         let token = token.as_deref();
         let p = target(t, s)?;
         let (owner, repo) = identity(&t.input.repo_url)?;
-        let directory_lock = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(
-                p.parent()
-                    .unwrap()
-                    .join(format!(".{owner}-{repo}.gharchive.lock")),
-            )?;
+        let directory_lock =
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(p.parent().unwrap().join(
+                    if crate::repository::is_github(&t.input.repo_url) {
+                        format!(".{owner}-{repo}.gharchive.lock")
+                    } else {
+                        format!(
+                            ".{}.gharchive.lock",
+                            p.file_name().unwrap().to_string_lossy()
+                        )
+                    },
+                ))?;
         directory_lock
             .try_lock_exclusive()
             .map_err(|_| Failure::new(1, "此备份目录正在被另一个任务使用"))?;
@@ -362,6 +359,10 @@ async fn perform(s: &Store, t: &Task) -> Outcome {
             outcome.stdout.push_str(&format!(
                 "GhBoost 内置加速：DNS/HTTPS 优选完成，任务代理 127.0.0.1:{port}\n"
             ));
+        } else if !crate::repository::is_github(&t.input.repo_url) {
+            outcome
+                .stdout
+                .push_str("Git 直连：其他 Git 服务不使用 GhBoost 加速、镜像或 GitHub Token\n");
         }
         acceleration = Some(automatic);
         let timeout = s.get("timeout_seconds")?.as_u64().unwrap();
@@ -566,6 +567,41 @@ pub async fn run_all(s: &Store) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn other_hosts_never_receive_github_token_or_acceleration() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::open_in(dir.path().into()).unwrap();
+        s.set("require_hosts", json!(true)).unwrap();
+        let task = s
+            .save_task(
+                None,
+                crate::db::TaskInput {
+                    name: "".into(),
+                    repo_url: "https://git.xeondev.com/LR/S.git".into(),
+                    backup_dir: dir.path().join("backups").to_string_lossy().into(),
+                    schedule_time: "03:00".into(),
+                    enabled: false,
+                    use_proxy: true,
+                    use_mirror: true,
+                    notes: "".into(),
+                },
+            )
+            .unwrap();
+        assert!(!task.input.use_proxy && !task.input.use_mirror);
+        let (url, env, connection) = prepare(&task, &s, Some("github-token-test")).await.unwrap();
+        assert_eq!(url, "https://git.xeondev.com/LR/S.git");
+        assert!(connection.port().is_none());
+        assert!(!env
+            .values()
+            .any(|v| v.contains("Authorization") || v.contains("github-token-test")));
+        let path = target(&task, &s).unwrap();
+        assert!(path.parent().unwrap().ends_with("git.xeondev.com/LR"));
+        assert_eq!(
+            path.file_name().unwrap().to_str().unwrap(),
+            crate::repository::mirror_name(&url, "S")
+        );
+        connection.close().await.unwrap();
+    }
     #[test]
     fn windows_path_boundary() {
         assert!(identity("o/CON").is_err());

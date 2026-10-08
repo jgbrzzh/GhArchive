@@ -54,11 +54,14 @@ src-tauri/src/bin/gharchive.rs
 src-tauri/src/cli.rs
 src-tauri/src/db/mod.rs
 src-tauri/src/lib.rs
+src-tauri/src/import.rs
+src-tauri/src/repository.rs
 src-tauri/src/main.rs
 src-tauri/src/scheduler/mod.rs
 src-tauri/src/secrets.rs
 src-tauri/src/update.rs
 src-tauri/testdata/update-fixture.txt
+src-tauri/testdata/import-links.md
 src-tauri/testdata/update-fixture.txt.sig
 src-tauri/tauri.conf.json
 src/App.vue

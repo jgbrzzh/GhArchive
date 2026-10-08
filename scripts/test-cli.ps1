@@ -37,6 +37,16 @@ try {
     $null = Invoke-Json @('remove',$id) 2
     $null = Invoke-Json @('remove',$id,'--yes')
     $null = Invoke-Json @('run',$id) 4
+    $fixture = Join-Path $root 'src-tauri/testdata/import-links.md'
+    $preview = Invoke-Json @('import','--file',$fixture,'--preview')
+    if ($preview.data.repositories.Count -ne 30 -or $preview.data.duplicates -ne 30) { throw 'Batch recognition failed' }
+    $batch = Invoke-Json @('import','--file',$fixture,'--dir',$backup,'--disabled')
+    if ($batch.data.created_ids.Count -ne 30) { throw 'Batch import failed' }
+    $again = Invoke-Json @('import','--file',$fixture,'--dir',$backup,'--disabled')
+    if ($again.data.created_ids.Count -ne 0 -or $again.data.skipped.Count -ne 30) { throw 'Batch reimport did not skip existing tasks' }
+    $null = Invoke-Json @('import','--file',$fixture,'--time','25:00') 1
+    $all = Invoke-Json @('list')
+    if ($all.data.Count -ne 30 -or @($all.data | Where-Object enabled).Count -ne 0) { throw 'Batch altered existing tasks or enabled test schedules' }
     Write-Host "CLI checks passed; isolated evidence: $testDir"
 } finally {
     $env:GHARCHIVE_DATA_DIR = $previous

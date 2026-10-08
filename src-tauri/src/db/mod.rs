@@ -205,10 +205,13 @@ impl Store {
             .optional()?
             .ok_or_else(|| Failure::new(4, "任务不存在"))
     }
-    pub fn save_task(&self, id: Option<i64>, mut t: TaskInput) -> Result<Task> {
-        let _lock = id.map(|id| crate::backup::lock(self, id)).transpose()?;
-        t.repo_url = ghboost_core::prepare_git_url(&t.repo_url)?;
+    pub(crate) fn validate_task(&self, mut t: TaskInput) -> Result<TaskInput> {
+        t.repo_url = crate::repository::normalize(&t.repo_url)?;
         crate::backup::identity(&t.repo_url)?;
+        if !crate::repository::is_github(&t.repo_url) {
+            t.use_proxy = false;
+            t.use_mirror = false;
+        }
         if t.name.trim().is_empty() {
             t.name = t
                 .repo_url
@@ -227,6 +230,12 @@ impl Store {
         if !PathBuf::from(&t.backup_dir).is_absolute() {
             return Err(Failure::new(1, "备份目录必须使用绝对路径"));
         }
+        next_time(&t.schedule_time, Utc::now())?;
+        Ok(t)
+    }
+    pub fn save_task(&self, id: Option<i64>, t: TaskInput) -> Result<Task> {
+        let _lock = id.map(|id| crate::backup::lock(self, id)).transpose()?;
+        let t = self.validate_task(t)?;
         let next = next_time(&t.schedule_time, Utc::now())?;
         let next = if t.enabled { Some(next) } else { None };
         let now = Utc::now().to_rfc3339();

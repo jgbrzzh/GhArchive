@@ -19,6 +19,7 @@
 - SQLite 与每日文件日志记录运行时间、退出码、stdout、stderr、大小和结果。
 - GitHub Token 使用 Windows DPAPI 按当前用户加密保存，不回读明文、不写入仓库 URL；配置 Token 时禁止镜像。
 - CLI 的成功、参数错误、帮助输出均支持统一 `--json` 封装。
+- 批量导入：粘贴聊天文字或 Markdown 清单，识别 GitHub 链接、去重、勾选预览，统一设置目录和每日时间；跳过已有任务。
 - 关于页显示版本与项目主页；设置/关于页可检查、下载和安装经过签名验证的软件更新。
 
 逐项实现与验收边界见 [要求自检](docs/AGENTS_AUDIT.md) 和 [验收记录](docs/VALIDATION.md)。
@@ -63,6 +64,24 @@ cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --bin gha
 GUI 使用 Windows 自带 WebView2 宿主，不启动 HTTP API 或 MCP 服务。`npm run dev` 只是前端开发服务器；浏览器预览不执行备份。安装后运行 `gharchive-desktop.exe`，命令行使用同目录的 `gharchive.exe`（可以将该目录加入 PATH）。
 
 ## CLI
+
+### 批量导入
+
+此功能当前在 main 开发版，已发布的 v0.1.1 安装包尚不包含。
+
+在「备份任务 → 批量导入」粘贴文字，点「识别仓库链接」，选择需要的仓库并设置目录、时间、启用状态和备注，再确认导入。支持 GitHub HTTPS、SSH、`owner/repo`，以及 XeonDEV、GitLab、自建 Git 服务的 HTTPS `.git` 链接；也支持 Markdown 转义和查询参数。每次最多 500 个仓库、文字不超过 1 MiB；GitHub 地址按大小写无关去重；其他站点保留路径大小写，已有任务保留原设置并跳过。
+
+也可从 UTF-8 文件或标准输入导入：
+
+```powershell
+gharchive import --file repos.txt --preview --json
+gharchive import --file repos.txt --time 03:00 --dir D:\backups --disabled --json
+Get-Content repos.txt -Raw -Encoding UTF8 | gharchive import --stdin --preview --json
+```
+
+预览不联网，不能证明仓库存在或可访问；不支持的协议或无效地址会列出原因。导入只创建任务，不立即备份，启用后按计划执行。整批验证和写入使用事务，输入错误时不会留下部分任务。
+
+GitHub 仍由 GhBoost 核心处理。其他 Git 站点使用 Git 直连，不套用 GitHub 镜像，不发送 GitHub Token；目前只支持无需交互认证的 HTTPS `.git` 地址。GitHub 镜像仍保存到 `<根目录>/<owner>/<repo>.git`；其他站点保存到 `<根目录>/<主机或主机__port端口>/<仓库命名空间>/<repo>-<URL的SHA256>.git`，避免不同主机或路径大小写在 Windows 上写进同一个镜像。
 
 首次 CLI 使用请阅读上述说明，然后接受：
 
