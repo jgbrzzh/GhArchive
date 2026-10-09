@@ -357,7 +357,7 @@ async fn perform(s: &Store, t: &Task) -> Outcome {
         };
         if let Some(port) = automatic.port() {
             outcome.stdout.push_str(&format!(
-                "GhBoost 内置加速：DNS/HTTPS 优选完成，任务代理 127.0.0.1:{port}\n"
+                "GhBoost 内置加速：任务代理 127.0.0.1:{port} 已就绪；核心按需验证路线、缓存刷新与失败回退\n"
             ));
         } else if !crate::repository::is_github(&t.input.repo_url) {
             outcome

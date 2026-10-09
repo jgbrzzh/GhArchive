@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 内置核心固定到 GhBoost `52aeac9`：使用 CONNECT 路线缓存、DNS 后台刷新、失败冷却及 IPv4/IPv6 并发候选回退。取消备份/更新前强制完整测速，避免测速失败阻断核心按需选路。
 - 支持 XeonDEV、GitLab、自建 Git 服务的公开 HTTPS `.git` 仓库；保留主机和完整路径，隔离 GitHub Token，Windows 镜像目录按 URL 指纹区分。
 - 新增 GUI / CLI 批量导入：从文字、Markdown、UTF-8 文件或标准输入识别 GitHub 仓库，去重、预览选择并统一设置任务；已有任务跳过，整批原子写入。
 

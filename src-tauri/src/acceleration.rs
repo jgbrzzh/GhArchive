@@ -18,13 +18,10 @@ impl Connection {
         if !enabled {
             return Ok(Self { store, proxy: None });
         }
-        tokio::time::timeout(
-            Duration::from_secs(90),
-            network::speedtest(&store, Some(domain)),
-        )
-        .await
-        .map_err(|_| Failure::new(3, "内置 GhBoost 的 DNS/HTTPS 优选超时"))?
-        .map_err(|e| Failure::new(e.exit, format!("内置 GhBoost 优选失败：{}", e.message)))?;
+        network::validate_domain(domain)?;
+        // The core validates and races routes on CONNECT, reuses healthy routes,
+        // refreshes DNS and cools down failures. A full speedtest is diagnostic,
+        // not a prerequisite: its failure must not prevent route fallback.
         let owned = OwnedProxy::start(store.clone()).await?;
         Ok(Self {
             store,
@@ -156,6 +153,43 @@ impl Drop for OwnedProxy {
 mod tests {
     use super::*;
     use ghboost_core::{prepare_git_env_with_options, GitOptions};
+
+    #[tokio::test]
+    async fn proxy_readiness_does_not_require_network_speedtest() {
+        let temp = tempfile::tempdir().unwrap();
+        let app = Store::open_in(temp.path().to_path_buf()).unwrap();
+        let connection = tokio::time::timeout(
+            Duration::from_secs(6),
+            Connection::prepare(&app, 1, true, "github.com"),
+        )
+        .await
+        .expect("starting the local listener must not wait for DNS/HTTPS probes")
+        .unwrap();
+        assert!(connection.port().is_some());
+        let env = connection.git_env(&GitOptions::default()).unwrap();
+        assert_eq!(
+            env["GIT_CONFIG_VALUE_0"],
+            format!("http://127.0.0.1:{}", connection.port().unwrap())
+        );
+        assert_eq!(
+            connection.store.history(1, Some("github.com")).unwrap(),
+            serde_json::json!([])
+        );
+        assert!(!connection.store.dir.join("system-proxy.json").exists());
+        assert!(!connection.store.dir.join("loopback-hosts.json").exists());
+        connection.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn invalid_domain_cannot_start_acceleration() {
+        let temp = tempfile::tempdir().unwrap();
+        let app = Store::open_in(temp.path().to_path_buf()).unwrap();
+        assert!(Connection::prepare(&app, 1, true, "example.com")
+            .await
+            .is_err());
+        let core = CoreStore::open_in(app.dir.join("ghboost/task-1")).unwrap();
+        assert_eq!(proxy::status(&core).unwrap()["running"], false);
+    }
 
     #[tokio::test]
     async fn stopped_proxy_does_not_silently_fall_back_to_direct() {

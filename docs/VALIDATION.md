@@ -1,5 +1,14 @@
 # 验收记录
 
+## 2026-10-09：核心更新与按需选路（开发版）
+
+- 远端 main 核实为 `52aeac9fcfac0b50241bf1aa9a82ceec8327bc63`，核心版本仍为 0.1.2。使用锁定提交的 Git archive 导出到忽略目录，全部源码文件 SHA256 与提交快照一致；不复制 GhBoost 工作区中另一任务正在维护的未提交修改。prepare-core 脚本也改用提交导出，包含核心测试并移除过时源码文件。
+- 移除强制 90 秒完整测速前置条件，直接使用核心 CONNECT 按需选路；健康缓存、DNS 后台刷新、失败冷却、IPv4/IPv6 并发候选回退由核心负责。Git 命令和重试共用任务代理；更新检查同样使用该接入。代理就绪日志不再宣称已经完成优选。
+- 应用 24 个库测试、核心 22 个单元测试及 4 个离线集成测试通过。核心中需管理员/真实 SNI 网络的 2 个显式测试保持 ignored；没有启用 SNI、安装 CA 或使用 loopback Hosts 模式。新增应用回归验证启动不依赖测速，且非法域名不能启动加速。
+- `npm run build`、前端格式、CLI smoke、Tauri `build --no-bundle -- --locked` 通过。仅构建本地开发产物，未创建版本标签或发布安装包。
+- 使用隔离数据目录、默认任务代理、无 Token/镜像，`octocat/git-consortium` 首次 mirror clone 与增量 fetch/remote update 均一次成功，退出码 0，耗时约 3 秒和 4 秒。
+- 用户指定的 `Variante/endfield_research_kit` 首次 mirror clone 与增量同样一次成功，退出码 0，耗时约 9 秒和 3 秒，最终镜像 57,850,468 字节。四轮运行证据在忽略的 `output/core-52aeac9-validation/`。未调整 Clash 或全局 Git 配置；本轮成功不保证其他网络环境始终连通，未重新操作原生 GUI/托盘或 Windows 登录验收。
+
 ## 2026-10-08：批量导入与其他 Git 服务（开发版）
 
 - 文字识别复用 GhBoost 的 GitHub 地址接口；增加其他服务的 HTTPS `.git` 地址校验。用户提供的 30 个地址全部识别，Markdown 标签/目标合并 30 次重复，清除查询参数；不联网判定仓库是否存在。文本上限 1 MiB，每批最多 500 个仓库。
@@ -12,7 +21,7 @@
 
 日期：2026-10-07，北京时间。平台：Windows x64，Rust 1.98.1、Node.js 24.19.0，当前应用版本 0.1.1。以下保留旧版本历史记录。
 
-当前依赖已同步到 GhBoost 远端提交 `5533732011b90dbc681056a74bff3a3b9edc0ee7`，核心 0.1.2。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。默认任务自动调用核心 DNS/HTTPS 优选和任务专用代理，不依赖外部 GhBoost 软件，不修改系统 PAC/代理或 Hosts，也不自动启用 SNI/安装根证书。
+当时依赖同步到 GhBoost 远端提交 `5533732011b90dbc681056a74bff3a3b9edc0ee7`，核心 0.1.2。核心副本仅在忽略的 `.deps` 内，GhArchive 未改动 GhBoost。该版本默认任务自动调用核心 DNS/HTTPS 优选和任务专用代理，不依赖外部 GhBoost 软件，不修改系统 PAC/代理或 Hosts，也不自动启用 SNI/安装根证书。
 
 下面的真实网络和 GUI/托盘验收记录来自首轮 `e289a0c00f23bb547fa26e374b6fb012ec0dcf20` 构建；新核心的构建与 CLI 复验单独记录，不能据此声称重新操作了 GUI 或重启电脑。
 

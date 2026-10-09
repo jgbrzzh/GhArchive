@@ -5,8 +5,8 @@
 | 要求 | 实现与验收情况 |
 | --- | --- |
 | GhArchive 独立项目，禁止改动 GhBoost | 符合。只读取远端核心快照；GhBoost 没有新增、修改或推送文件。 |
-| 私有核心复制到 `.deps`，固定来源提交 | 符合。`ghboost-core.lock.json` 锁定 `5533732011b90dbc681056a74bff3a3b9edc0ee7`，核心 0.1.2；Cargo 路径依赖，`.deps` 被忽略。 |
-| 自动调用内置 GhBoost 获取仓库 | 此前存在缺口，本轮修复。默认 GUI/CLI/调度任务调用核心优选、启动任务代理、生成 Git URL/环境；不依赖外部 GhBoost 软件。 |
+| 私有核心复制到 `.deps`，固定来源提交 | 符合。`ghboost-core.lock.json` 锁定 `52aeac9fcfac0b50241bf1aa9a82ceec8327bc63`，核心 0.1.2；从已提交源码复制，Cargo 路径依赖，`.deps` 被忽略。 |
+| 自动调用内置 GhBoost 获取仓库 | 符合。默认 GUI/CLI/调度任务启动任务代理、生成 Git URL/环境，使用核心按需验证、缓存刷新与失败候选回退；不依赖外部 GhBoost 软件。 |
 | 不重复实现加速、不静默写 Hosts | 符合。DNS/HTTPS 优选和代理路由来自核心；应用只管理生命周期。不修改系统 PAC/代理，Hosts 接口只做已有配置检查。 |
 | 四种仓库输入格式 | 符合。统一经核心规范化为 HTTPS，再验证 owner/repo 和 Windows 目录名。 |
 | 任务字段、mirror clone、增量更新 | 符合。SQLite 保存名称、地址、目录、HH:mm、启用、代理、镜像和备注；实际验证首次 clone 与随后 fetch/remote update。 |
